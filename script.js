@@ -57,45 +57,39 @@ async function RefreshAccessToken() {
 
 async function GetCurrentlyPlaying(refreshInterval) {
 	try {
-		// Get the current player information from Spotify
 		const response = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
 			method: "GET",
 			headers: {
 				'Authorization': `Bearer ${access_token}`,
 				'Content-Type': 'application/json'
 			}
-		})
-	
-		// If we got a response, save the access token
-		if (response.ok)
-		{
+		});
+		if (response.ok) {
 			const responseData = await response.json();
 			console.debug(responseData);
 			UpdatePlayer(responseData);
+			setTimeout(() => {
+				GetCurrentlyPlaying()
+			}, 1000);
+		} else if (response.status === 429) {
+			const retryAfter = response.headers.get('Retry-After');
+			const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 30000;
+			console.warn(`Rate limited by Spotify. Waiting ${waitTime / 1000}s before retrying.`);
+			setTimeout(() => {
+				GetCurrentlyPlaying()
+			}, waitTime);
+		} else if (response.status === 401) {
+			console.debug(`${response.status}`);
+			RefreshAccessToken();
+		} else {
+			console.error(`${response.status}`);
+			setTimeout(() => {
+				GetCurrentlyPlaying()
+			}, 2000);
 		}
-		else
-		{
-			switch (response.status)
-			{
-				case 401:
-					console.debug(`${response.status}`)
-					RefreshAccessToken();
-					break;
-				default:
-					console.error(`${response.status}`)
-			}
-		}
-		// Refresh
-		setTimeout(() => {
-			GetCurrentlyPlaying()
-		}, 1000);
-	}
-	catch (error)
-	{
+	} catch (error) {
 		console.debug(error);
 		SetVisibility(false);
-		
-		// Try again in 2 seconds
 		setTimeout(() => {
 			GetCurrentlyPlaying()
 		}, 2000);
